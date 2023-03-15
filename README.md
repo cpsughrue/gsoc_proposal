@@ -81,7 +81,7 @@ if (clang-build-daemon == running) {
 
 > Termination
 
-The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the deamon leaving it with zero registrations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single target and may persist across a large project. 
+The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the deamon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single target and may persist across a large project. 
 
 THOUGHT: The downside to terminating after a specified amount of time is that there will be `n` seconds of pointless resource usage. I am particularly interested in hearing the communities thoughts on the best way to terminate the build deamon. It feels like there has to be a better way.
 
