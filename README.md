@@ -10,7 +10,7 @@ The project will be split into three main phases.
 
 **PHASE 1: integrate build daemon flag into the clang driver.**
 
-The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and Execute. Category 1 focuses on ensuring that the build daemon flag is properly handled throughout all five stages.
+The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and Execute. Phase 1 focuses on ensuring that the build daemon flag is properly handled throughout all five stages.
 
 > 1. Parse: Option Parsing
 
