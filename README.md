@@ -4,7 +4,7 @@ One of the great promises of modules is compile time improvements. Textual inclu
 
 ## Overview
 
-A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the target's dependency graph will begin to emerge. In parallel, the daemon can leverage the emerging graph to schedule and execute each module's build efficiently. Before building each module, the daemon will check to ensure the dependency has not already been built or is being built. The goal is to have a single entity with knowledge of the entire build process that can efficiently coordinate and manage the build of dependencies (i.e., modules).
+A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the executables's dependency graph will begin to emerge. In parallel, the daemon can leverage the emerging graph to schedule and execute each module's build efficiently. Before building each module, the daemon will check to ensure the dependency has not already been built or is being built. The goal is to have a single entity with knowledge of the entire build process that can efficiently coordinate and manage the build of dependencies (i.e., modules).
 
 ## Core Tenants
 
@@ -31,11 +31,11 @@ The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and 
 
 The clang driver will parse `--build-daemon`
 ```console
-$ clang++ -### --build-daemon foo.cpp bar.cpp -o target
+$ clang++ -### --build-daemon foo.cpp bar.cpp -o test
 
 "clang-17" "-cc1" ... "--build-daemon" "-o" "/tmp/foo-66a77d.o" "-x" "c++" "foo.cpp"
 "clang-17" "-cc1" ... "--build-daemon" "-o" "/tmp/bar-73584c.o" "-x" "c++" "bar.cpp"
-"ld" ... "-o" "target" ... "/tmp/foo-66a77d.o" "/tmp/bar-73584c.o" ...
+"ld" ... "-o" "test" ... "/tmp/foo-66a77d.o" "/tmp/bar-73584c.o" ...
 ```
 
 NOTE: The user should be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain context hash.
@@ -63,10 +63,10 @@ $ clang++ -ccc-print-phases --build-daemon foo.cpp
 The ToolChain will select `clang` as the appropriate tool to handle phase 2: deamon.
 
 ``` console
-$ clang++ -ccc-print-bindings --build-daemon foo.cpp -o target
+$ clang++ -ccc-print-bindings --build-daemon foo.cpp -o test
 
 # "x86_64-unknown-linux-gnu" - "clang", inputs: ["foo.cpp"], output: "/tmp/foo-f45458.o"
-# "x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "target"
+# "x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "test"
 ```
 
 > 4. Translate: Tool Specific Argument Translation
@@ -96,7 +96,7 @@ if (clang-build-daemon == running) {
 
 > Termination
 
-The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the deamon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single target and may persist across a large project. 
+The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the deamon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single executable and may persist across a large project. 
 
 THOUGHT: The downside to terminating after a specified amount of time is that there will be `n` seconds of pointless resource usage. I am particularly interested in hearing the communities thoughts on the best way to terminate the build deamon. It feels like there has to be a better way.
 
