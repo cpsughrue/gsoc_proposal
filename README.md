@@ -1,8 +1,23 @@
+## Abstract
 
+One of the great promises of modules is compile time improvements. Textual inclusion builds are slow. A header file must be re-processed every time a translation unit includes it. With modules, each module is processed only once and re-used by all translation units that import it. Modules provide an opportunity to optimize the build of dependencies rather than blindly processing every dependency mentioned in each translation unit. Currently, clang provides two ways to build modules: implicitly and explicitly. Both methods have strengths and weaknesses. Explicit modules are fast but require significant development effort on the part of build systems while implicit modules are relatively inefficient but can integrate into existing workflows seamlessly. "Modules build daemon: build system agnostic support for explicitly built modules" is an effort to find a compromise between implicit and explicit modules so that developers can enjoy the benefits of explicit modules regardless of build system.
 
-## Project Description
+## Overview
 
-The project will be split into three main phases.
+A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the target's dependency graph will begin to emerge. In parallel, the daemon can leverage the emerging graph to schedule and execute each module's build efficiently. Before building each module, the daemon will check to ensure the dependency has not already been built or is being built. The goal is to have a single entity with knowledge of the entire build process that can efficiently coordinate and manage the build of dependencies (i.e., modules).
+
+## Core Tenants
+
+- The build daemon must be fast
+    - Without providing a performance boost relative to the implicit system this project provides minimal benefits to the community in return for a large amount of work.
+- The build daemon must be highly encapsulated.
+    - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that clang can focus on being a compiler.
+- The build daemon must be accessible with a single flag.
+
+---
+## Project Details
+
+The project will be split into three main phases and focus on providing support to parallel build on unix systems.
 1. Integrate build daemon flag into clang driver
 2. Setup build daemon
 3. Shift work to build daemon
@@ -122,8 +137,41 @@ The goal of the build deamon is to minimize build time. Finding the right equati
 
 THOUGHT: I am not sure if cache should be RAM or disk. RAM would obviously be faster but disk could hold more modules. I think a combination of the two is probably the right answer but that implementaition may be out of scope for GSoC. 
 
+---
+## Timeline
 
+Review of official timeline
+- March 20 to April 4: GSoC application period
+- May 4: Accepted projects announced
+- May 29 to August 28 (13 weeks): Work!
 
+Project Timeline & Milestones
+
+- Phase 1: May 29 - June 11 (2 weeks)
+    1. Add `--build-daemon` flag to clang so that it is recognized as a valid flag
+	2. Make sure clang driver properly handles `--build-deamon` flag
+- Phase 2: June 12 - July 2 (3 weeks)
+	1. Create skeleton build daemon that can be initialized with --build-daemon and shut down at end of building or when a fatal eror occurs
+	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations building. 
+- Phase 3: July 3 - August 28 (8 weeks)
+    1. implement ability for daemon to scan dependencies of registered clang instances using clang-scan-deps. Results will be saved to a log file on a per invocation basis but then forgotten. This is to make sure that scanning can be done correctly
+	2. Implement ability for daemon to merge results from each dependency scan. And maintain dependency graph for lifetime of the build
+	3. Implement scheduling strategy. No modules will actually be built but rather simulated. Log file will output current version of dependency graph and associated build schedule
+	4. Implement ability for daemon to spawn clang invocations to build modules. For the sake of simplicity at this point all built modules will be stored on disk for the lifetime of the build
+	5. Implement cache management strategy
+
+---
+## Future Work
+
+I am excited about the project and will not be able to accomplish everything I would like to in the alloted time period. I have listed a few enhancements I look foward to tackling after GSoC.
+
+- Implement support for other operating systems (i.e. windows)
+- Implement support for serial and distributed builds
+- Add flags to customize deamon behavior
+    - Time before termination
+	- Cache size
+- General Profiling
+- Schedule and cache optimization
 
 
 
