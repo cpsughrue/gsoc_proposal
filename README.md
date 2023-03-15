@@ -116,7 +116,7 @@ The cache invalidator will consider several different metrics when deciding how 
 	- How long has it been since the module was last required?
 - How large is the module?
 
-The goal of the build deamon is to minimize build time. Finding the right equation will take some experimentation but the basic idea is to assign a score to each prebuilt module including the one just built and maximize the total score of the cache. For example, `score = number_of_times_built - time_since_last_build` could be the equation used to prioritize modules for the cache. In the image bellow the deamon has completed building a module and places it in the cache by removing two other modules increasing the cache score by two.
+The goal of the build deamon is to minimize build time. Finding the right equation will take some experimentation but the basic idea is to assign a score to each prebuilt module including the one just built and maximize the total score of the cache. For example, `score = number_of_times_built - time_since_last_build` could be used to prioritize modules. In the image bellow the deamon has completed building a module and places it in the cache by removing two other modules increasing the cache score by two.
 
 <img src="caching.PNG" width="50%" height="50%" border="1">
 
