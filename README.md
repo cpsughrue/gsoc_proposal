@@ -29,7 +29,7 @@ THOGUHT: I am not sure any other phase of the driver needs to be touched. I want
 
 > 2. Pipeline: Compilation Action
 
-To improve encapsulation the process of checking for `clang-build-daemon`, registering with `clang-build-daemon`, and building/returning modules will be treated as its own subprocess and be included in the tree of phases. As input the `deamon` phase will use a preprocessed translation unit and output all built modules necessary to build the translation unit.
+To improve encapsulation functionality encompased by the build deamon will be treated as its own subprocess and be included in the tree of phases. As input the `deamon` phase will use a preprocessed translation unit and output all built modules necessary to build the translation unit.
 
 ``` console
 $ clang++ -ccc-print-phases --build-daemon foo.cpp
