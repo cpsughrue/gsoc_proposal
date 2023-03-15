@@ -37,7 +37,7 @@ $ clang++ -ccc-print-phases --build-daemon foo.cpp
 
                +- 0: input, "foo.cpp", c++
             +- 1: preprocessor, {0}, c++-cpp-output
-		 +- 2: deamon, {1}, pcm
+	 +- 2: deamon, {1}, pcm
       +- 3: compiler, {2}, ir
    +- 4: backend, {3}, assembler
 +- 5: assembler, {4}, object
@@ -94,15 +94,15 @@ a. Scanning
 
 The deamon will utilize the tool `clang-scan-deps` to conduct dependency scans for each translation unit registered with the deamon. Once scanned, each translation unit's dependency graph, will be merged when possible to create a project wide dependency graph. While modules may not survive the lifetime of the deamon the dependency graph will and can be used to efficiently schedule builds.
 
-<img src="scanning_1.PNG" width="30%" height="30%">
+<img src="scanning_1.PNG" width="50%" height="50%">
 <br>
-<img src="scanning_2.PNG" width="30%" height="30%">
+<img src="scanning_2.PNG" width="80%" height="80%">
 
 b. Scheduling
 
 Priority list based scheduling
 
-<img src="scheduling.PNG" width="30%" height="30%">
+<img src="scheduling.PNG" width="50%" height="50%">
 
 c. Cache management
 
