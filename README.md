@@ -14,7 +14,6 @@ A daemon that can serve as a micro-build system designed to manage modules will 
     - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that the rest of clang can focus on being a compiler.
 - The build daemon must be accessible with a single flag.
 
----
 ## Scope
 
 Work will focus on parallel unix builds using traditional Clang modules and C++ standard modules.
@@ -26,7 +25,6 @@ The project will be split into three main phases and focus on providing support 
 1. Integrate build daemon flag into clang driver
 2. Setup build daemon
 3. Shift work to build daemon
----
 
 **PHASE 1: integrate build daemon flag into the clang driver.**
 
