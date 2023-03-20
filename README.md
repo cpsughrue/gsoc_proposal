@@ -4,14 +4,14 @@ One of the great promises of modules is compile time improvements. Textual inclu
 
 ## Overview
 
-A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the executables's dependency graph will begin to emerge. In parallel, the daemon can leverage the emerging graph to schedule and execute each module's build efficiently. Before building each module, the daemon will check to ensure the dependency has not already been built or is being built. The goal is to have a single entity with knowledge of the entire build process that can efficiently coordinate and manage the build of dependencies (i.e., modules).
+A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the daemon will create a dependency graph for the project. In parallel, the daemon can leverage the emerging graph to schedule and build each module's AST. Before processing each module, the daemon will check to ensure the dependency has not already been processed or is being processed. The goal is to have a single entity, with knowledge of the entire build process, that can efficiently coordinate and manage the build of dependencies (i.e., modules).
 
 ## Core Tenants
 
-- The build daemon must be fast
+- The build daemon must be fast and minimize overhead
     - Without providing a performance boost relative to the implicit system this project provides minimal benefits to the community in return for a large amount of work.
 - The build daemon must be highly encapsulated.
-    - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that clang can focus on being a compiler.
+    - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that the rest of clang can focus on being a compiler.
 - The build daemon must be accessible with a single flag.
 
 ---
@@ -25,54 +25,79 @@ The project will be split into three main phases and focus on providing support 
 
 **PHASE 1: integrate build daemon flag into the clang driver.**
 
-The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and Execute. Phase 1 focuses on ensuring that the build daemon flag is properly handled throughout all five stages.
+The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and Execute. Phase 1 focuses on ensuring that the build daemon flag is properly handled throughout all five stages. The bulk of how the daemon flag is handled is based on the downstream scanning daemon.
 
 > 1. Parse: Option Parsing
 
-The clang driver will parse `--build-daemon`
-```console
-$ clang++ -### --build-daemon foo.cpp bar.cpp -o test
+The clang driver will parse `--module-build-daemon`
 
-"clang-17" "-cc1" ... "--build-daemon" "-o" "/tmp/foo-66a77d.o" "-x" "c++" "foo.cpp"
-"clang-17" "-cc1" ... "--build-daemon" "-o" "/tmp/bar-73584c.o" "-x" "c++" "bar.cpp"
-"ld" ... "-o" "test" ... "/tmp/foo-66a77d.o" "/tmp/bar-73584c.o" ...
+```console
+$ clang++ --module-build-daemon foo.cpp bar.cpp -o test
 ```
 
-NOTE: The user should be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain context hash.
-
-THOGUHT: I am not sure any other phase of the driver needs to be touched. I want to prioritize encapsalation but adding another phase `daemon` to the pipeline portion of the driver may be pointless. I need to do more research on the utility of creating an additional phase rather then including new work in a preexisting phase. Incase I need to add the phase `deamon` I included a small section on it in my draft proposal.
+NOTE: The user should also be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain their context hash.
 
 > 2. Pipeline: Compilation Action
 
-To improve encapsulation functionality encompased by the build deamon will be treated as its own subprocess and be included in the tree of phases. As input the `deamon` phase will use a preprocessed translation unit and output all built modules necessary to build the translation unit.
+There will be no change to the pipeline stage. The module build deamon fits in well with `2: compiler` as it contributes to the ir that will be handed the backend. The daemon will provide each clang invocation with the IR ASTs for each module required.
 
 ``` console
-$ clang++ -ccc-print-phases --build-daemon foo.cpp
+$ clang++ -ccc-print-phases --module-build-daemon foo.cpp
 
-               +- 0: input, "foo.cpp", c++
-            +- 1: preprocessor, {0}, c++-cpp-output
-         +- 2: deamon, {1}, pcm
-      +- 3: compiler, {2}, ir
-   +- 4: backend, {3}, assembler
-+- 5: assembler, {4}, object
-6: linker, {5}, image
+            +- 0: input, "foo.cpp", c++
+         +- 1: preprocessor, {0}, c++-cpp-output
+      +- 2: compiler, {1}, ir
+   +- 3: backend, {2}, assembler
++- 4: assembler, {3}, object
+5: linker, {4}, image
 ```
 
 > 3. Bind: Tool & Filename Selection
 
-The ToolChain will select `clang` as the appropriate tool to handle phase 2: deamon.
+The `ToolChain` will still select `clang` as the appropriate tool.
 
 ``` console
-$ clang++ -ccc-print-bindings --build-daemon foo.cpp -o test
+$ clang++ -ccc-print-bindings --module-build-daemon foo.cpp -o test
 
 # "x86_64-unknown-linux-gnu" - "clang", inputs: ["foo.cpp"], output: "/tmp/foo-f45458.o"
 # "x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "test"
 ```
 
 > 4. Translate: Tool Specific Argument Translation
+
+When `--module-build-deamon` is passed to the clang driver Translate must include `-cc1modbuildd` as the first flag with each clang invocation. By treating `-cc1modbuildd` as an alternative to `-cc1` the module build deamon will be highly encapsulated.
+
+```console
+$ clang++ -### --module-build-daemon foo.cpp bar.cpp -o test
+
+"clang-17" "-cc1modbuildd" "-o" "/tmp/foo-66a77d.o" "-x" "c++" "foo.cpp"
+"clang-17" "-cc1modbuildd" "-o" "/tmp/bar-73584c.o" "-x" "c++" "bar.cpp"
+"ld" ... "-o" "test" ... "/tmp/foo-66a77d.o" "/tmp/bar-73584c.o" ...
+```
+
+```cpp
+// apple/llvm-project driver.cpp
+
+int clang_main()
+	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
+		return ExecuteCC1Tool()
+
+static int ExecuteCC1Tool()
+	if (Tool == "-cc1")
+		return cc1_main()
+	if (Tool == "-cc1depscand")
+		return cc1depscand_main()
+	if (Tool == "-cc1depscan")
+		return cc1depscan_main()
+
+	// addition
+	if (Tool == "-cc1modbuildd")
+		return cc1modbuildd_main()
+```
+
 > 5. Execute
 
-When `--build-deamon` is passed to the clang driver Translate must include the `--build-deamon` flag with each invocation of clang.
+Compilation is executed.
 
 ---
 **PHASE 2: Setup build daemon infrastructure**
@@ -83,7 +108,7 @@ There is an existing daemon implementation in a downstream fork (https://github.
 
 > Initialization
 
-When `--build-daemon` is passed to the clang driver it will be fowarded along to each clang invocation. The clang invocation will preprocess a translation unit then look for the running process: `clang-build-daemon`. If `clang-build-daemon` exists the clang invocation will register with the daemon. If `clang-build-daemon` does not exist the clang invocation will first initialize `clang-build-daemon` then register with the running process.
+When `--module-build-daemon` is passed to the clang driver it will be fowarded along to each clang invocation. The clang invocation will preprocess a translation unit then look for the running process: `clang-build-daemon`. If `clang-build-daemon` exists the clang invocation will register with the daemon. If `clang-build-daemon` does not exist the clang invocation will first initialize `clang-build-daemon` then register with the running process.
 
 ```cpp
 if (clang-build-daemon == running) {
@@ -148,10 +173,10 @@ Review of official timeline
 Project Timeline & Milestones
 
 - Phase 1: May 29 - June 11 (2 weeks)
-    1. Add `--build-daemon` flag to clang so that it is recognized as a valid flag
+    1. Add `--module-build-daemon` flag to clang so that it is recognized as a valid flag
 	2. Make sure clang driver properly handles `--build-deamon` flag
 - Phase 2: June 12 - July 2 (3 weeks)
-	1. Create skeleton build daemon that can be initialized with --build-daemon and shut down at end of building or when a fatal eror occurs
+	1. Create skeleton build daemon that can be initialized with --module-build-daemon and shut down at end of building or when a fatal eror occurs
 	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations building. 
 - Phase 3: July 3 - August 28 (8 weeks)
     1. implement ability for daemon to scan dependencies of registered clang instances using clang-scan-deps. Results will be saved to a log file on a per invocation basis but then forgotten. This is to make sure that scanning can be done correctly
