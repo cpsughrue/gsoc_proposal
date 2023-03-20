@@ -103,28 +103,31 @@ When `--module-build-daemon` is passed to the clang driver `-cc1modbuildd` will 
 ```cpp
 // driver.cpp
 
-int clang_main()
+int clang_main() {
 	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
-		return ExecuteCC1Tool()
+		return ExecuteCC1Tool();
+}
 
-static int ExecuteCC1Tool()
+static int ExecuteCC1Tool() {
 	if (Tool == "-cc1modbuildd")
-		return cc1modbuildd_main()
+		return cc1modbuildd_main();
+}
 ```
 
 ```cpp
 // cc1modbuildd_main.cpp
 
-int cc1modbuildd_main()
+int cc1modbuildd_main() {
 
-	bool NoSpawnDaemon = (bool)Sharing.Path
+	bool NoSpawnDaemon = (bool)Sharing.Path;
 	auto Daemon = NoSpawnDaemon
                     ? Daemon::connectToDaemonAndShakeHands(Path)
-                    : Daemon::constructAndShakeHands(Path, Exec, Sharing)
+                    : Daemon::constructAndShakeHands(Path, Exec, Sharing);
 
 	// register with daemon
-	CC1DaemonProtocol Comms(*Daemon)
-	Comms.putCommand(WorkingDirectory, OldArgs, Mapping)
+	CC1DaemonProtocol Comms(*Daemon);
+	Comms.putCommand(WorkingDirectory, OldArgs, Mapping);
+}
 ```
 
 > Termination
@@ -147,7 +150,7 @@ While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file d
 
 class FullDeps
 	public:
-		void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)
+		void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex);
 	private:
 		std::unordered_map<IndexedModuleID, ModuleDeps, IndexedModuleIDHasher> Modules;
 
