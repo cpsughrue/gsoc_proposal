@@ -15,6 +15,11 @@ A daemon that can serve as a micro-build system designed to manage modules will 
 - The build daemon must be accessible with a single flag.
 
 ---
+## Scope
+
+Work will focus on parallel unix builds using traditional Clang modules and C++ standard modules.
+
+---
 ## Project Details
 
 The project will be split into three main phases and focus on providing support to parallel build on unix systems.
@@ -75,26 +80,6 @@ $ clang++ -### --module-build-daemon foo.cpp bar.cpp -o test
 "ld" ... "-o" "test" ... "/tmp/foo-66a77d.o" "/tmp/bar-73584c.o" ...
 ```
 
-```cpp
-// apple/llvm-project driver.cpp
-
-int clang_main()
-	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
-		return ExecuteCC1Tool()
-
-static int ExecuteCC1Tool()
-	if (Tool == "-cc1")
-		return cc1_main()
-	if (Tool == "-cc1depscand")
-		return cc1depscand_main()
-	if (Tool == "-cc1depscan")
-		return cc1depscan_main()
-
-	// addition
-	if (Tool == "-cc1modbuildd")
-		return cc1modbuildd_main()
-```
-
 > 5. Execute
 
 Compilation is executed.
@@ -102,28 +87,51 @@ Compilation is executed.
 ---
 **PHASE 2: Setup build daemon infrastructure**
 
-The goal of phase 2 is to implement the boiler plate and infrastructure required to develop the build daemon's core functionality. This includes an outline of the build deamon, anything requiried to spawn the deamon with `--deamon-build`, ability for clang invocations to register with the deamon, and a mechanism to terminate the deamon.
+The goal of phase 2 is to implement the boiler plate and infrastructure required to develop the build daemon's core functionality. This includes the ability to spawn the deamon with `-cc1modbuildd`, ability for clang invocations to register with the deamon, and a mechanism to terminate the deamon.
 
-There is an existing daemon implementation in a downstream fork (https://github.com/apple/llvm-project/blob/next/clang/tools/driver/cc1depscan_main.cpp) that can be used to speed up phase 2 develoment.
+There is an existing daemon implementation that can scan file dependencies in a downstream fork (https://github.com/apple/llvm-project/blob/next/clang/tools/driver/cc1depscan_main.cpp) that will be used to help phase 2 develoment.
+
+THOUGHT: To prevent duplicate code between `cc1depscand` and `cc1modbuildd` I think it would be a good idea to move common deamon functionality out of `cc1depscan*` files to another location. Perhaps a llvm-project/clang/tools/daemon direcotry could be created.
+
+> Daemon Details
+- The IPC mechanism used to comunicate with the daemon will be unix sockets
+	- NOTE: Windows is in the process of supporting unix sockets 
+		- (https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/)
 
 > Initialization
 
-When `--module-build-daemon` is passed to the clang driver it will be fowarded along to each clang invocation. The clang invocation will preprocess a translation unit then look for the running process: `clang-build-daemon`. If `clang-build-daemon` exists the clang invocation will register with the daemon. If `clang-build-daemon` does not exist the clang invocation will first initialize `clang-build-daemon` then register with the running process.
+When `--module-build-daemon` is passed to the clang driver `-cc1modbuildd` will be included as the first flag of each clang invocation. The clang invocation will preprocess a translation unit then look for a running daemon. If the daemon exists the clang invocation will register with it. If the daemon does not exist the clang invocation will first initialize the deamon then register with it.
 
 ```cpp
-if (clang-build-daemon == running) {
-	register(translationUnit);
-} else {
-	startDeamon();
-	register(translationUnit);
-}
+// driver.cpp
+
+int clang_main()
+	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
+		return ExecuteCC1Tool()
+
+static int ExecuteCC1Tool()
+	if (Tool == "-cc1modbuildd")
+		return cc1modbuildd_main()
+```
+
+```cpp
+// cc1modbuildd_main.cpp
+
+int cc1modbuildd_main()
+
+	bool NoSpawnDaemon = (bool)Sharing.Path
+	auto Daemon = NoSpawnDaemon
+                    ? Daemon::connectToDaemonAndShakeHands(Path)
+                    : Daemon::constructAndShakeHands(Path, Exec, Sharing)
+
+	// register with daemon
+	CC1DaemonProtocol Comms(*Daemon)
+	Comms.putCommand(WorkingDirectory, OldArgs, Mapping)
 ```
 
 > Termination
 
-The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the deamon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single executable and may persist across a large project. 
-
-THOUGHT: The downside to terminating after a specified amount of time is that there will be `n` seconds of pointless resource usage. I am particularly interested in hearing the communities thoughts on the best way to terminate the build deamon. It feels like there has to be a better way.
+The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the daemon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single executable and may persist across a large project. 
 
 ---
 **PHASE 3: Build System**
@@ -132,18 +140,35 @@ The goal of phase 3 is to implement the core functionality of the build deamon s
 
 > Scanning
 
-The deamon will utilize the tool `clang-scan-deps` to conduct dependency scans for each translation unit registered with the deamon. Once scanned, each translation unit's dependency graph, will be merged when possible to create a project wide dependency graph. While modules may not survive the lifetime of the deamon the dependency graph will and can be used to efficiently schedule builds.
+While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file dependencies. So, the build deamon will base it's scanning on the tool `clang-scan-deps`. `clang-scan-deps` can be integrated into the build daemon by relying on `class FullDeps`.
 
-Bellow are two example of scanning. In the first example TU1's dependency graph is a subset of TU2's dependency graph. The deamon, after scanning TU2 would realize that the dependency graph of TU1 is fully encompased by TU2's dependency graph and would free it from memory. In example two, after scanning TU2's dependency graph the deamon would merge the two dependency graphs.<br>
-<img src="scanning_1.PNG" width="50%" height="50%">
-<br>
-<img src="scanning_2.PNG" width="80%" height="80%">
+`FullDeps` or more specifically the `FullDeps` attribute `Modules` will represet all dependencies for the daemon. The scans for each translation unit will be merged into `Modules` using the public method `void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)`.
+
+```cpp
+// ClangScanDeps.cpp
+
+class FullDeps
+	public:
+		void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)
+	private:
+		std::unordered_map<IndexedModuleID, ModuleDeps, IndexedModuleIDHasher> Modules;
+
+struct ModuleDeps
+{
+	// module ID
+	// collection of paths to direct dependencies
+}
+```
+
+NOTE: This requires moving `class FullDeps` to its own file.
 
 > Scheduling & Building
 
-Builds will be based on priority list based scheduling. Each module will be ranked based on how many other modules are dependent on itself and built acordingly.
+Builds will be based on a deterministic topological sort. By making the topological sort deterministic it will be easier to resolve issues. However, topological sorts are not inherently deterministic so a heuristic must be used to chose an order. One possible heuristic is to order equivalent modules alphabetically.
 
 <img src="scheduling.PNG" width="50%" height="50%">
+
+THOUGHT: It is possible that the benefits of having a deterministic order are outways by the performance penality of creating that order. I need to do more research on deterministic topological sorts. Also, topological sort works well when scheduling for an isolated translation unit, but in reality many translation units will be processed in parallel. The topological sort needs to take into account all translation units when prioritizing modules.
 
 > Cache management
 
@@ -156,11 +181,11 @@ The cache invalidator will consider several different metrics when deciding how 
 	- How long has it been since the module was last required?
 - How large is the module?
 
-The goal of the build deamon is to minimize build time. Finding the right equation will take some experimentation but the basic idea is to assign a score to each prebuilt module including the one just built and maximize the total score of the cache. For example, `score = number_of_times_built - time_since_last_build` could be used to prioritize modules. In the image bellow the deamon has completed building a module and places it in the cache by removing two other modules increasing the cache score by two.
+The goal of the build deamon is to minimize build time. Finding the right heuristic will take some experimentation but the basic idea is to assign a score to each prebuilt module including the one just built and maximize the total score of the cache. For example, `score = number_of_times_built - time_since_last_build` could be used to prioritize modules. In the image bellow the deamon has completed building a module and places it in the cache by removing two other modules increasing the cache score by two.
 
 <img src="caching.PNG" width="50%" height="50%" border="1">
 
-THOUGHT: I am not sure if cache should be RAM or disk. RAM would obviously be faster but disk could hold more modules. I think a combination of the two is probably the right answer but that implementaition may be out of scope for GSoC. 
+THOUGHT: I am not sure if cache should be RAM or disk. RAM would obviously be faster but disk could hold more modules.
 
 ---
 ## Timeline
@@ -172,15 +197,16 @@ Review of official timeline
 
 Project Timeline & Milestones
 
+- Phase 0: Present to May 28
+	1. Iron out implementation and design details
 - Phase 1: May 29 - June 11 (2 weeks)
     1. Add `--module-build-daemon` flag to clang so that it is recognized as a valid flag
-	2. Make sure clang driver properly handles `--build-deamon` flag
+	2. Make sure clang driver properly handles `--module-build-daemon` flag
 - Phase 2: June 12 - July 2 (3 weeks)
-	1. Create skeleton build daemon that can be initialized with --module-build-daemon and shut down at end of building or when a fatal eror occurs
-	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations building. 
+	1. Create skeleton build daemon that can be initialized with `-cc1modbuildd` and shut down
+	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations registered. 
 - Phase 3: July 3 - August 28 (8 weeks)
-    1. implement ability for daemon to scan dependencies of registered clang instances using clang-scan-deps. Results will be saved to a log file on a per invocation basis but then forgotten. This is to make sure that scanning can be done correctly
-	2. Implement ability for daemon to merge results from each dependency scan. And maintain dependency graph for lifetime of the build
+    1. Implement ability for daemon to scan dependencies of registered clang instances using clang-scan-deps. Results will be saved to a log file on a per invocation basis. This is to make sure that scanning can be done correctly
 	3. Implement scheduling strategy. No modules will actually be built but rather simulated. Log file will output current version of dependency graph and associated build schedule
 	4. Implement ability for daemon to spawn clang invocations to build modules. For the sake of simplicity at this point all built modules will be stored on disk for the lifetime of the build
 	5. Implement cache management strategy
