@@ -1,4 +1,4 @@
-## Abstract
+## Motivation
 
 One of the great promises of modules is compile time improvements. Textual inclusion builds are slow. A header file must be re-processed every time a translation unit includes it. With modules, each module is processed only once and re-used by all translation units that import it. Modules provide an opportunity to optimize the build of dependencies rather than blindly processing every dependency mentioned in each translation unit. Currently, clang provides two ways to build modules: implicitly and explicitly. Both methods have strengths and weaknesses. Explicit modules are fast but require significant development effort on the part of build systems while implicit modules are relatively inefficient but can integrate into existing workflows seamlessly. "Modules build daemon: build system agnostic support for explicitly built modules" is an effort to find a compromise between implicit and explicit modules so that developers can enjoy the benefits of explicit modules regardless of build system.
 
@@ -8,23 +8,23 @@ A daemon that can serve as a micro-build system designed to manage modules will 
 
 ## Core Tenants
 
-- The build daemon must be fast and minimize overhead
+- The build daemon must be fast to minimize overhead
     - Without providing a performance boost relative to the implicit system this project provides minimal benefits to the community in return for a large amount of work.
-- The build daemon must be highly encapsulated.
+- The build daemon must be highly encapsulated
     - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that the rest of clang can focus on being a compiler.
-- The build daemon must be accessible with a single flag.
+- The build daemon must be accessible with a single flag
 
 ## Scope
 
-Work will focus on parallel unix builds using traditional Clang modules and C++ standard modules.
+Work will focus on parallel Unix builds using traditional Clang modules and C++ standard modules.
 
 ---
 ## Project Details
 
-The project will be split into three main phases and focus on providing support to parallel build on unix systems.
+The project will be split into three main phases
 1. Integrate build daemon flag into clang driver
-2. Setup build daemon
-3. Shift work to build daemon
+2. Setup build daemon infrastructure
+3. Implement core build daemon functionality
 
 **PHASE 1: integrate build daemon flag into the clang driver.**
 
@@ -89,7 +89,7 @@ The goal of phase 2 is to implement the boiler plate and infrastructure required
 
 There is an existing daemon implementation that can scan file dependencies in a downstream fork (https://github.com/apple/llvm-project/blob/next/clang/tools/driver/cc1depscan_main.cpp) that will be used to help phase 2 develoment.
 
-THOUGHT: To prevent duplicate code between `cc1depscand` and `cc1modbuildd` I think it would be a good idea to move common deamon functionality out of `cc1depscan*` files to another location. Perhaps a llvm-project/clang/tools/daemon direcotry could be created.
+THOUGHT: To prevent duplicate code between `cc1depscand` and `cc1modbuildd` I think it would be a good idea to move common deamon functionality out of `cc1depscan*` files to another location. Perhaps a llvm-project/clang/tools/daemon directory could be created.
 
 > Daemon Details
 - The IPC mechanism used to comunicate with the daemon will be unix sockets
@@ -135,9 +135,9 @@ int cc1modbuildd_main() {
 The build deamon will automatically terminate after "sitting empty" for a specified amount of time. For example, if a clang invocations de-registers with the daemon leaving it with zero registered clang invocations. The deamon will wait `n` seconds before terminating itself. By using a time limit the deamon will not be tied to a single executable and may persist across a large project. 
 
 ---
-**PHASE 3: Build System**
+**PHASE 3: Implement core build daemon functionality**
 
-The goal of phase 3 is to implement the core functionality of the build deamon such as scanning, scheduling, cache management, and module building. Phase 3 is the largest phase by far. 
+The goal of phase 3 is to implement as scanning, scheduling, cache management, and module building. Phase 3 is the largest phase by far. 
 
 > Scanning
 
@@ -169,7 +169,7 @@ Builds will be based on a deterministic topological sort. By making the topologi
 
 <img src="scheduling.PNG" width="50%" height="50%">
 
-THOUGHT: It is possible that the benefits of having a deterministic order are outways by the performance penality of creating that order. I need to do more research on deterministic topological sorts. Also, topological sort works well when scheduling for an isolated translation unit, but in reality many translation units will be processed in parallel. The topological sort needs to take into account all translation units when prioritizing modules.
+THOUGHT: It is possible that the benefits of having a deterministic order are outways by the performance penality of creating that order. I need to do more research on deterministic topological sorts. Also, the topological sort needs to take into account all translation units when prioritizing modules.
 
 > Cache management
 
