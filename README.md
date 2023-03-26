@@ -188,6 +188,7 @@ new_ttl = curent_ttl + (depth_in_DAG * SCALING_FACTOR_2);
 ```
 
 [1] future development work could include creating an in memory cache in addition to an on disk cache
+
 ---
 ## Timeline
 
