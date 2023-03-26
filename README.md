@@ -156,8 +156,8 @@ class FullDeps
 
 struct ModuleDeps
 {
-	// module ID
-	// collection of paths to direct dependencies
+	ModuleID ID; // module ID
+	llvm::StringSet<> FileDeps; // collection of paths to direct dependencies
 }
 ```
 
@@ -165,7 +165,7 @@ NOTE: This requires moving `class FullDeps` to its own file.
 
 > Scheduling & Building
 
-Builds will be based on a deterministic topological sort. By making the topological sort deterministic it will be easier to resolve issues. However, topological sorts are not inherently deterministic so a heuristic must be used to chose an order. One possible heuristic is to order equivalent modules alphabetically.
+Builds will be based on a deterministic topological sort. By making the topological sort deterministic it will be easier to debug any issues. However, topological sorts are not inherently deterministic so a heuristic must be used to chose an order. One possible heuristic is to order equivalent modules alphabetically.
 
 <img src="scheduling.PNG" width="50%" height="50%">
 
@@ -173,21 +173,21 @@ THOUGHT: It is possible that the benefits of having a deterministic order are ou
 
 > Cache management
 
-When a module is built the deamon will check how much space is left in the cache. If the size of the built module is less then the amount of cache available the module will be committed to cache. If the size of the built module is greater then the amount of cache available then the deamon will perform cache invalidation. During cache invalidation either the just build module will be discarded or cache will be made available by discarding other prebuilt modules.
+The cache will comprise precompiled modules in the form of Clang AST files. Clang AST files contain a compressed bitstream of the AST and supporting data structures and can be chained to represent a project's dependency graph, making them a good fit for the build daemon.
 
-The cache invalidator will consider several different metrics when deciding how to make space.
+The precompiled modules will initially solely be stored on disk allowing all precompiled modules to be stored simultaneously on the majority of modern computers.[1] To accommodate resource constrained systems a simple cache invalidator will be implemented. 
 
-- How "hot" is the module?
-	- How may times has the module been required throughout the lifetime of the build?
-	- How long has it been since the module was last required?
-- How large is the module?
+The cache invalidator will combine frequency based prioritization, time-to-live prioritization, and the dependency graph to determine which modules are saved. Everytime a module is built or used a new time-to-live will be calculated based on the following equations. 
 
-The goal of the build deamon is to minimize build time. Finding the right heuristic will take some experimentation but the basic idea is to assign a score to each prebuilt module including the one just built and maximize the total score of the cache. For example, `score = number_of_times_built - time_since_last_build` could be used to prioritize modules. In the image bellow the deamon has completed building a module and places it in the cache by removing two other modules increasing the cache score by two.
+```cpp
+// senario one: module is compiled and added to cache
+initial_ttl = depth_in_DAG * SCALING_FACTOR_1;
 
-<img src="caching.PNG" width="50%" height="50%" border="1">
+// senario two: precompiled module is used
+new_ttl = curent_ttl + (depth_in_DAG * SCALING_FACTOR_2);
+```
 
-THOUGHT: I am not sure if cache should be RAM or disk. RAM would obviously be faster but disk could hold more modules.
-
+[1] future development work could include creating an in memory cache in addition to an on disk cache
 ---
 ## Timeline
 
@@ -222,8 +222,9 @@ I am excited about the project and will not be able to accomplish everything I w
 - Add flags to customize deamon behavior
     - Time before termination
 	- Cache size
-- General Profiling
+- Profiling
 - Schedule and cache optimization
+	- Add a "hot" cache that stores precompiled modules in memory
 
 
 
