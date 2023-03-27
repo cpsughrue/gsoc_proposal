@@ -4,7 +4,7 @@ One of the great promises of modules is compile time improvements. Textual inclu
 
 ## Overview
 
-A daemon that can serve as a micro-build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the daemon will create a dependency graph for the project. In parallel, the daemon can leverage the emerging graph to schedule and build each module's AST. Before processing each module, the daemon will check to ensure the dependency has not already been processed or is being processed. The goal is to have a single entity, with knowledge of the entire build process, that can efficiently coordinate and manage the build of dependencies (i.e., modules).
+A daemon that can serve as a build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the daemon will create a dependency graph for the project. In parallel, the daemon can leverage the emerging graph to schedule and build each module's AST. Before processing each module, the daemon will check to ensure the dependency has not already been processed or is being processed. The goal is to have a single entity, with knowledge of the entire build process, that can efficiently coordinate and manage the build of dependencies (i.e., modules).
 
 ## Core Tenants
 
@@ -165,13 +165,21 @@ NOTE: This requires moving `class FullDeps` to its own file.
 
 > Scheduling & Building
 
-Builds will be based on a deterministic topological sort. By making the topological sort deterministic it will be easier to debug any issues. However, topological sorts are not inherently deterministic so a heuristic must be used to chose an order. One possible heuristic is to order equivalent modules alphabetically.
+Scheduling will be done in accoradance with a deterministic topological sort. The order of dependencies will be based first on the number of translation units that require a dependency then second on the alphabetical ordering of the dependencies. 
 
-<img src="scheduling.PNG" width="50%" height="50%">
+For example, the build daemon receives its first registration, `lib/Parse/ParseAST.cpp`, and creates a graph of its dependencies. At first, since `lib/Parse/ParseASTcpp` is the only translation unit regestered with the build daemon the dependencies all have the same weight of `1` and are ordered in alphabetical order.
 
-THOUGHT: It is possible that the benefits of having a deterministic order are outways by the performance penality of creating that order. I need to do more research on deterministic topological sorts. Also, the topological sort needs to take into account all translation units when prioritizing modules.
+<img src="parseast_schedule.PNG" width="100%" height="100%">
 
-> Cache management
+Now, a second translation unit, `lib/Sema/SemaConcept.cpp`, is registered with the build daemon. The build daemon scans it's dependencies and incorporates the new translation unit's dependency graph into the projects dependency graph. 
+
+<img src="semaconcept_graph.PNG" width="25%" height="25%">
+
+The weights and priority are updated to reflect the new information.
+
+<img src="project_schedule.PNG" width="100%" height="100%">
+
+> Cache Management
 
 The cache will comprise precompiled modules in the form of Clang AST files. Clang AST files contain a compressed bitstream of the AST and supporting data structures and can be chained to represent a project's dependency graph, making them a good fit for the build daemon.
 
