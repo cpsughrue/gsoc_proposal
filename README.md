@@ -6,17 +6,10 @@ One of the great promises of modules is compile time improvements. Textual inclu
 
 A daemon that can serve as a build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the daemon will create a dependency graph for the project. In parallel, the daemon can leverage the emerging graph to schedule and build each module's AST. Before processing each module, the daemon will check to ensure the dependency has not already been processed or is being processed. The goal is to have a single entity, with knowledge of the entire build process, that can efficiently coordinate and manage the build of dependencies (i.e., modules).
 
-## Core Tenants
-
-- The build daemon must be fast to minimize overhead
-    - Without providing a performance boost relative to the implicit system this project provides minimal benefits to the community in return for a large amount of work.
-- The build daemon must be highly encapsulated
-    - One problematic aspect of the implicit system is that the compiler has begun to look like a build system. A goal of this project is to encapsulate all build system like functionality into the daemon so that the rest of clang can focus on being a compiler.
-- The build daemon must be accessible with a single flag
-
 ## Scope
 
-Work will focus on parallel Unix builds using traditional Clang modules and C++ standard modules.
+- Work will focus on parallel Unix builds using traditional Clang modules and C++ standard modules.
+- I imagine development will first take place in apple/llvm-project with selective patches being pushed upstream due to how much dependency scanning and daemon infrastructure already exists in apple/llvm-project.
 
 ---
 ## Project Details
@@ -141,9 +134,9 @@ The goal of phase 3 is to implement as scanning, scheduling, cache management, a
 
 > Scanning
 
-While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file dependencies. So, the build deamon will base it's scanning on the tool `clang-scan-deps`. `clang-scan-deps` can be integrated into the build daemon by relying on `class FullDeps`.
+While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file dependencies. So, the build deamon will use the scanning tool `clang-scan-deps`. `clang-scan-deps` can be integrated into the build daemon by relying on `class FullDeps`.
 
-`FullDeps` or more specifically the `FullDeps` attribute `Modules` will represet all dependencies for the daemon. The scans for each translation unit will be merged into `Modules` using the public method `void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)`.
+`FullDeps` or more specifically the `FullDeps` attribute `Modules` will represet all dependencies for the daemon. The scans for each translation unit will be merged into `Modules` using the public method `void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)`. 
 
 ```cpp
 // ClangScanDeps.cpp
@@ -160,8 +153,8 @@ struct ModuleDeps
 	llvm::StringSet<> FileDeps; // collection of paths to direct dependencies
 }
 ```
+The build daemon's scanning functionality can be based on the libclang API provided by a downstream fork of llvm-project in `tools/libclang/CDependencies.cpp`. 
 
-NOTE: This requires moving `class FullDeps` to its own file.
 
 > Scheduling & Building
 
@@ -194,6 +187,8 @@ initial_ttl = depth_in_DAG * SCALING_FACTOR_1;
 // senario two: precompiled module is used
 new_ttl = curent_ttl + (depth_in_DAG * SCALING_FACTOR_2);
 ```
+Once a module's ttl has expired it will be flaged as a candidate for deletion. If multiple modules have expired the cache invalidator will start with the module with the lowest weight.
+
 
 [1] future development work could include creating an in memory cache in addition to an on disk cache
 
