@@ -33,7 +33,8 @@ $ clang++ --fmodule-build-daemon foo.cpp bar.cpp -o test
 ```cpp
 // Options.td
 
-def fmodule-build-daemon : Flag<["-"], "fmodule-build-daemon">, Group<f_Group>, Flags<[NoXarchOption]>, HelpText<"Enable module build daemon functionality">;
+def fmodule-build-daemon : Flag<["-"], "fmodule-build-daemon">, Group<f_Group>, Flags<[NoXarchOption]>, 
+HelpText<"Enable module build daemon functionality">;
 ```
 ```cpp
 // clang/lib/Driver/ToolChains/Clang.cpp
