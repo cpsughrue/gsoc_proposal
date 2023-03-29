@@ -40,9 +40,9 @@ HelpText<"Enable module build daemon functionality">;
 // clang/lib/Driver/ToolChains/Clang.cpp
 void Clang::ConstructJob(Compilation &C, const JobAction &Job, ...) {
 
-	if (Job.getKind() == Action::ModBuildJobClass) {
-		CmdArgs.push_back("-cc1modbuildd");
-	}
+    if (Job.getKind() == Action::ModBuildJobClass) {
+        CmdArgs.push_back("-cc1modbuildd");
+    }
 
 }
 ```
