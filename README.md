@@ -111,20 +111,21 @@ When `--fmodule-build-daemon` is passed to the clang driver `-cc1modbuildd` will
 // clang/tools/driver/driver.cpp
 
 int clang_main() {
-	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
-		return ExecuteCC1Tool();
+    if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
+        return ExecuteCC1Tool();
 }
 
 static int ExecuteCC1Tool(SmallVectorImpl<const char *> &ArgV, 
-						  const llvm::ToolContext &ToolContext) {
+                          const llvm::ToolContext &ToolContext) {
 	
-	StringRef Tool = ArgV[1];
-	if (Tool == "-cc1")
-    	return cc1_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
-	#if LLVM_ON_UNIX
-	if (Tool == "-cc1modbuildd")
-		return cc1modbuildd_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
-	#endif /*LLVM_ON_UNIX*/
+    StringRef Tool = ArgV[1];
+    if (Tool == "-cc1")
+        return cc1_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
+
+    #if LLVM_ON_UNIX
+    if (Tool == "-cc1modbuildd")
+        return cc1modbuildd_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
+    #endif /*LLVM_ON_UNIX*/
 }
 ```
 
