@@ -25,20 +25,33 @@ The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and 
 
 > 1. Parse: Option Parsing
 
-The clang driver will parse `--module-build-daemon`
+The clang driver will parse `--fmodule-build-daemon` and pass `-cc1modbuildd` to the clang front end in place of `cc1`. See more discussion on `cc1modbuildd` in Phase 2: Initialization.
 
 ```console
-$ clang++ --module-build-daemon foo.cpp bar.cpp -o test
+$ clang++ --fmodule-build-daemon foo.cpp bar.cpp -o test
 ```
+```cpp
+// Options.td
 
-NOTE: The user should also be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain their context hash.
+def fmodule-build-daemon : Flag<["-"], "fmodule-build-daemon">, Group<f_Group>, Flags<[NoXarchOption]>, HelpText<"Enable module build daemon functionality">;
+```
+```cpp
+// clang/lib/Driver/ToolChains/Clang.cpp
+void Clang::ConstructJob(Compilation &C, const JobAction &Job, ...) {
+
+	if (Job.getKind() == Action::ModBuildJobClass) {
+		CmdArgs.push_back("-cc1modbuildd");
+	}
+
+}
+```
 
 > 2. Pipeline: Compilation Action
 
 There will be no change to the pipeline stage. The module build deamon fits in well with `2: compiler` as it contributes to the ir that will be handed the backend. The daemon will provide each clang invocation with the IR ASTs for each module required.
 
 ``` console
-$ clang++ -ccc-print-phases --module-build-daemon foo.cpp
+$ clang++ -ccc-print-phases --fmodule-build-daemon foo.cpp
 
             +- 0: input, "foo.cpp", c++
          +- 1: preprocessor, {0}, c++-cpp-output
@@ -53,7 +66,7 @@ $ clang++ -ccc-print-phases --module-build-daemon foo.cpp
 The `ToolChain` will still select `clang` as the appropriate tool.
 
 ``` console
-$ clang++ -ccc-print-bindings --module-build-daemon foo.cpp -o test
+$ clang++ -ccc-print-bindings --fmodule-build-daemon foo.cpp -o test
 
 # "x86_64-unknown-linux-gnu" - "clang", inputs: ["foo.cpp"], output: "/tmp/foo-f45458.o"
 # "x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "test"
@@ -64,7 +77,7 @@ $ clang++ -ccc-print-bindings --module-build-daemon foo.cpp -o test
 When `--module-build-deamon` is passed to the clang driver Translate must include `-cc1modbuildd` as the first flag with each clang invocation. By treating `-cc1modbuildd` as an alternative to `-cc1` the module build deamon will be highly encapsulated.
 
 ```console
-$ clang++ -### --module-build-daemon foo.cpp bar.cpp -o test
+$ clang++ -### --fmodule-build-daemon foo.cpp bar.cpp -o test
 
 "clang-17" "-cc1modbuildd" "-o" "/tmp/foo-66a77d.o" "-x" "c++" "foo.cpp"
 "clang-17" "-cc1modbuildd" "-o" "/tmp/bar-73584c.o" "-x" "c++" "bar.cpp"
@@ -91,19 +104,26 @@ THOUGHT: To prevent duplicate code between `cc1depscand` and `cc1modbuildd` I th
 
 > Initialization
 
-When `--module-build-daemon` is passed to the clang driver `-cc1modbuildd` will be included as the first flag of each clang invocation. The clang invocation will preprocess a translation unit then look for a running daemon. If the daemon exists the clang invocation will register with it. If the daemon does not exist the clang invocation will first initialize the deamon then register with it.
+When `--fmodule-build-daemon` is passed to the clang driver `-cc1modbuildd` will be included as the first flag of each clang invocation. The clang invocation will preprocess a translation unit then look for a running daemon. If the daemon exists the clang invocation will register with it. If the daemon does not exist the clang invocation will first initialize the deamon then register with it.
 
 ```cpp
-// driver.cpp
+// clang/tools/driver/driver.cpp
 
 int clang_main() {
 	if (Args.size() >= 2 && StringRef(Args[1]).startswith("-cc1"))
 		return ExecuteCC1Tool();
 }
 
-static int ExecuteCC1Tool() {
+static int ExecuteCC1Tool(SmallVectorImpl<const char *> &ArgV, 
+						  const llvm::ToolContext &ToolContext) {
+	
+	StringRef Tool = ArgV[1];
+	if (Tool == "-cc1")
+    	return cc1_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
+	#if LLVM_ON_UNIX
 	if (Tool == "-cc1modbuildd")
-		return cc1modbuildd_main();
+		return cc1modbuildd_main(ArrayRef(ArgV).slice(1), ArgV[0], GetExecutablePathVP);
+	#endif /*LLVM_ON_UNIX*/
 }
 ```
 
@@ -205,8 +225,8 @@ Project Timeline & Milestones
 - Phase 0: Present to May 28
 	1. Iron out implementation and design details
 - Phase 1: May 29 - June 11 (2 weeks)
-    1. Add `--module-build-daemon` flag to clang so that it is recognized as a valid flag
-	2. Make sure clang driver properly handles `--module-build-daemon` flag
+    1. Add `--fmodule-build-daemon` flag to clang so that it is recognized as a valid flag
+	2. Make sure clang driver properly handles `--fmodule-build-daemon` flag
 - Phase 2: June 12 - July 2 (3 weeks)
 	1. Create skeleton build daemon that can be initialized with `-cc1modbuildd` and shut down
 	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations registered. 
@@ -231,5 +251,5 @@ I am excited about the project and will not be able to accomplish everything I w
 	- Add a "hot" cache that stores precompiled modules in memory
 
 
-
+NOTE: The user should also be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain their context hash.
 
