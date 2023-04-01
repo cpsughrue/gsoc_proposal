@@ -288,6 +288,3 @@ I am excited about the project and will not be able to accomplish everything I w
 - Schedule and cache optimization
 	- Add a "hot" cache that stores precompiled modules in memory
 
-
-NOTE: The user should also be able to include a path to precompiled modules which can be used by the build daemon. For this to function correctly pre compiled modules must contain their context hash.
-
