@@ -1,15 +1,17 @@
+# Modules build daemon: build system agnostic support for explicitly built modules [GSoC Proposal]
+
 ## Motivation
 
-One of the great promises of modules is compile time improvements. Textual inclusion builds are slow. A header file must be re-processed every time a translation unit includes it. With modules, each module is processed only once and re-used by all translation units that import it. Modules provide an opportunity to optimize the build of dependencies rather than blindly processing every dependency mentioned in each translation unit. Currently, clang provides two ways to build modules: implicitly and explicitly. Both methods have strengths and weaknesses. Explicit modules are fast but require significant development effort on the part of build systems while implicit modules are relatively inefficient but can integrate into existing workflows seamlessly. "Modules build daemon: build system agnostic support for explicitly built modules" is an effort to find a compromise between implicit and explicit modules so that developers can enjoy the benefits of explicit modules regardless of build system.
+Modules have the potential to significantly enhance compile-time performance, as they eliminate the need for repetitive processing of header files during textual inclusion builds. By processing a module once and reusing it across all associated translation units, modules offer a more efficient approach to managing build dependencies. Clang currently supports two methods for building modules: implicit and explicit. While explicit modules boast speed, they demand considerable development effort from build systems. Implicit modules, on the other hand, integrate smoothly with existing workflows but lack efficiency. "Modules Build Daemon: Build System Agnostic Support for Explicitly Built Modules" aims to balance these two approaches, enabling developers to reap the benefits of explicit modules irrespective of their build system.
 
 ## Overview
 
-A daemon that can serve as a build system designed to manage modules will be implemented to provide build systems agnostic support for explicitly built modules. With the simple addition of a single command line flag, each clang invocation will register its translation unit with the daemon. The daemon will take the registered translation unit and scan its dependencies. As translation units are registered and scanned, the daemon will create a dependency graph for the project. In parallel, the daemon can leverage the emerging graph to schedule and build each module's AST. Before processing each module, the daemon will check to ensure the dependency has not already been processed or is being processed. The goal is to have a single entity, with knowledge of the entire build process, that can efficiently coordinate and manage the build of dependencies (i.e., modules).
+This project aims to implement a daemon that serves as a build system manager for modules, providing support for explicitly built modules irrespective of the build system. By simply incorporating a single command line flag, each clang invocation registers its translation unit with the daemon, which then scans the unit's dependencies. As translation units are registered and analyzed, the daemon constructs a dependency graph for the entire project. Concurrently, it utilizes the emerging graph to schedule and build each module's AST. This approach allows for a single, comprehensive entity to effectively coordinate and manage the build of modules throughout the entire build process.
 
 ## Scope
 
 - Work will focus on parallel Unix builds using traditional Clang modules and C++ standard modules.
-- I imagine development will first take place in apple/llvm-project with selective patches being pushed upstream due to how much dependency scanning and daemon infrastructure already exists in apple/llvm-project.
+- Development will first take place in apple/llvm-project with selective patches being pushed upstream due to how much dependency scanning and daemon infrastructure already exists in apple/llvm-project.
 
 ---
 ## Project Details
@@ -223,12 +225,12 @@ Review of official timeline
 
 Project Timeline & Milestones
 
-- Phase 0: May 4 to May 28 (3.5 weeks)
+- PHASE 0: May 4 to May 28 (3.5 weeks)
 
     - Task 1: finalize implmentation details
         - Verification Approach: complete a detailed algorithm design for each core feature of the build daemon (scanning, caching, scheduling) and create a list of subtasks for each task
 
-- Phase 1: May 29 - June 11 (2 weeks)
+- PHASE 1: May 29 - June 11 (2 weeks)
 
     - Task 1: add `-fmodule-build-daemon` flag to clang so that it is recognized as a valid flag
         - Verification Approach: a developer will be able to build any valid clang project with "--build-daemon" included in the list of flags.
@@ -238,7 +240,7 @@ Project Timeline & Milestones
         - Verification Apporach: when a developer uses `-fmodule-build-daemon` then `-cc1modbuildd` will be passed to the clang front end
         - Notes: at this point the flag `-cc1modbuildd` will not have any functionality
 
-- Phase 2: June 12 - July 2 (3 weeks)
+- PHASE 2: June 12 - July 2 (3 weeks)
 
     - Task 1: create the skeleton of the build daemon
         - Verification Approach: When `-fmodule-build-daemon` is passed to the clang driver a build daemon is initialized and terminates after a specified amount of time
@@ -248,7 +250,7 @@ Project Timeline & Milestones
         - Verification Approach: When `-fmodule-build-daemon` is passed to the clang driver the build daemon will maintain a list of active clang invocations
 
 
-- Phase 3: July 3 - August 28 (8 weeks)
+- PHASE 3: July 3 - August 28 (8 weeks)
 
     - Task 1: Implement ability for build daemon to scan dependencies of registered clang invokations
         - Verification Approach: As clang invokations are registered with the build daemon the daemon will generate a dependency graph for the registered translation unit.
@@ -279,12 +281,10 @@ Project Timeline & Milestones
 
 I am excited about the project and will not be able to accomplish everything I would like to in the alloted time period. I have listed a few enhancements I look foward to tackling after GSoC.
 
-- Implement support for other operating systems (i.e. windows)
-- Implement support for serial and distributed builds
+- Implement support for Windows
+- Implement support for distributed builds
 - Add flags to customize deamon behavior
     - Time before termination
 	- Cache size
-- Profiling
 - Schedule and cache optimization
 	- Add a "hot" cache that stores precompiled modules in memory
-
