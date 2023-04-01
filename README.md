@@ -25,7 +25,7 @@ The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and 
 
 > 1. Parse: Option Parsing
 
-The clang driver will parse `--fmodule-build-daemon` and pass `-cc1modbuildd` to the clang front end in place of `cc1`. See more discussion on `cc1modbuildd` in Phase 2: Initialization.
+The clang driver will parse `--fmodule-build-daemon`.
 
 ```console
 $ clang++ --fmodule-build-daemon foo.cpp bar.cpp -o test
@@ -36,20 +36,10 @@ $ clang++ --fmodule-build-daemon foo.cpp bar.cpp -o test
 def fmodule-build-daemon : Flag<["-"], "fmodule-build-daemon">, Group<f_Group>, Flags<[NoXarchOption]>, 
 HelpText<"Enable module build daemon functionality">;
 ```
-```cpp
-// clang/lib/Driver/ToolChains/Clang.cpp
-void Clang::ConstructJob(Compilation &C, const JobAction &Job, ...) {
-
-    if (Job.getKind() == Action::ModBuildJobClass) {
-        CmdArgs.push_back("-cc1modbuildd");
-    }
-
-}
-```
 
 > 2. Pipeline: Compilation Action
 
-There will be no change to the pipeline stage. The module build deamon fits in well with `2: compiler` as it contributes to the ir that will be handed the backend. The daemon will provide each clang invocation with the IR ASTs for each module required.
+There will be no change to the pipeline stage. The module build deamon fits in well with `2: compiler` as it contributes to the IR that will be handed to the backend.
 
 ``` console
 $ clang++ -ccc-print-phases --fmodule-build-daemon foo.cpp
@@ -69,14 +59,23 @@ The `ToolChain` will still select `clang` as the appropriate tool.
 ``` console
 $ clang++ -ccc-print-bindings --fmodule-build-daemon foo.cpp -o test
 
-# "x86_64-unknown-linux-gnu" - "clang", inputs: ["foo.cpp"], output: "/tmp/foo-f45458.o"
-# "x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "test"
+"x86_64-unknown-linux-gnu" - "clang", inputs: ["foo.cpp"], output: "/tmp/foo-f45458.o"
+"x86_64-unknown-linux-gnu" - "GNU::Linker", inputs: ["/tmp/foo-f45458.o"], output: "test"
 ```
 
 > 4. Translate: Tool Specific Argument Translation
 
-When `--module-build-deamon` is passed to the clang driver Translate must include `-cc1modbuildd` as the first flag with each clang invocation. By treating `-cc1modbuildd` as an alternative to `-cc1` the module build deamon will be highly encapsulated.
+When `--fmodule-build-deamon` is passed to the clang driver Translate must include `-cc1modbuildd` as the first flag with each clang invocation. By treating `-cc1modbuildd` as an alternative to `-cc1` the module build deamon will be highly encapsulated. See more discussion on `-cc1modbuildd` in `Phase 2: Initialization`.
 
+```cpp
+// clang/lib/Driver/ToolChains/Clang.cpp
+
+void Clang::ConstructJob(Compilation &C, const JobAction &Job, ...) {
+    if (Job.getKind() == Action::ModBuildJobClass) {
+        CmdArgs.push_back("-cc1modbuildd");
+    }
+}
+```
 ```console
 $ clang++ -### --fmodule-build-daemon foo.cpp bar.cpp -o test
 
@@ -224,19 +223,56 @@ Review of official timeline
 
 Project Timeline & Milestones
 
-- Phase 0: Present to May 28
-	1. Iron out implementation and design details
+- Phase 0: May 4 to May 28 (3.5 weeks)
+
+    - Task 1: finalize implmentation details
+        - Verification Approach: complete a detailed algorithm design for each core feature of the build daemon (scanning, caching, scheduling) and create a list of subtasks for each task
+
 - Phase 1: May 29 - June 11 (2 weeks)
-    1. Add `--fmodule-build-daemon` flag to clang so that it is recognized as a valid flag
-	2. Make sure clang driver properly handles `--fmodule-build-daemon` flag
+
+    - Task 1: add `-fmodule-build-daemon` flag to clang so that it is recognized as a valid flag
+        - Verification Approach: a developer will be able to build any valid clang project with "--build-daemon" included in the list of flags.
+        - Notes: At this point the flag "--build-daemon" will not have any functionality but will simply be a valid option and serve as a starting point for further develovment
+
+    - Task 2: create a new Job so that `-cc1modbuildd` can be passed to the clang front end
+        - Verification Apporach: when a developer uses `-fmodule-build-daemon` then `-cc1modbuildd` will be passed to the clang front end
+        - Notes: at this point the flag `-cc1modbuildd` will not have any functionality
+
 - Phase 2: June 12 - July 2 (3 weeks)
-	1. Create skeleton build daemon that can be initialized with `-cc1modbuildd` and shut down
-	2. Implimint ability for clang instances to register and unregister with the deamon. Daemon should maintain a running list of clang invocations registered. 
+
+    - Task 1: create the skeleton of the build daemon
+        - Verification Approach: When `-fmodule-build-daemon` is passed to the clang driver a build daemon is initialized and terminates after a specified amount of time
+        - Notes: will be based on `cc1depscan`
+
+    - Task 2: implement ability for clang invokations to register and unregister with the daemon
+        - Verification Approach: When `-fmodule-build-daemon` is passed to the clang driver the build daemon will maintain a list of active clang invocations
+
+
 - Phase 3: July 3 - August 28 (8 weeks)
-    1. Implement ability for daemon to scan dependencies of registered clang instances using clang-scan-deps. Results will be saved to a log file on a per invocation basis. This is to make sure that scanning can be done correctly
-	3. Implement scheduling strategy. No modules will actually be built but rather simulated. Log file will output current version of dependency graph and associated build schedule
-	4. Implement ability for daemon to spawn clang invocations to build modules. For the sake of simplicity at this point all built modules will be stored on disk for the lifetime of the build
-	5. Implement cache management strategy
+
+    - Task 1: Implement ability for build daemon to scan dependencies of registered clang invokations
+        - Verification Approach: As clang invokations are registered with the build daemon the daemon will generate a dependency graph for the registered translation unit.
+        - Note: to verify, the dependency graph for each translation unit will be written to a log file
+
+    - Task 2: Implement ability for build daemon to construct a project wide dependency graph
+        - Verification Approach: The build daemon should maintian a dependency graph representative of all translation units scanned
+        - Note: In addition to the translation unit dependency graph logs the build daemon will write the project wide dependency graph to a log file before terminating
+
+    - Task 3: Implement ability for build daemon to schedule dependency builds
+        - Verification Approach: based on the project wide dependency graph the build daemon should mainitain a build list that specifies the order modules are to be built
+        - Note: after each scan is completed the build list will be updated
+
+    - Task 4: Implement ability for build daemon to spawn clang invokations
+        - Verification Approach: build daemon will use the build list to spawn clang invokations, build modules, ans store AST files in memory
+        - Note: all AST files will simply be stored on disk. There will be no cache invalidation
+
+    - Task 5: Implement ability for build daemon to return module's AST files to the clang invocation
+        - Verification Approach: Origional clang invocation can used modules build by daemon to compile a translation unit
+        - Note: Up until this point clang invokations will register with the build daemon but still use the implicit system. After this task is complete the clang invocation will use the modules built by the daemon.
+
+    - Task 6: Implement cache management
+        - Verification approach: When the system runs out of space the cache invalidator will be smart about how it makes room
+
 
 ---
 ## Future Work
