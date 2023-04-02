@@ -8,19 +8,20 @@ Modules have the potential to significantly enhance compile-time performance, as
 
 This project aims to implement a daemon that serves as a build system manager for modules, providing support for explicitly built modules irrespective of the build system. By simply incorporating a single command line flag, each clang invocation registers its translation unit with the daemon, which then scans the unit's dependencies. As translation units are registered and analyzed, the daemon constructs a dependency graph for the entire project. Concurrently, it utilizes the emerging graph to schedule and build each module's AST. This approach allows for a single, comprehensive entity to effectively coordinate and manage the build of modules throughout the entire build process.
 
-## Scope
+---
+## Project Priorities
 
-- Work will focus on parallel Unix builds using traditional Clang modules and C++ standard modules.
-- Development will first take place in apple/llvm-project with selective patches being pushed upstream due to how much dependency scanning and daemon infrastructure already exists in apple/llvm-project.
+Initial development will focus on parallel Unix builds using traditional Clang modules and C++ standard modules. The section on `Future Work` discusses additional development that is out of scope for GSoC but will take place later down the road. 
 
 ---
 ## Project Details
 
-The project will be split into three main phases
+Development will be split into three phases
 1. Integrate build daemon flag into clang driver
 2. Setup build daemon infrastructure
 3. Implement core build daemon functionality
 
+---
 **PHASE 1: integrate build daemon flag into the clang driver.**
 
 The clang driver consists of five stages: Parse, Pipeline, Bind, Translate, and Execute. Phase 1 focuses on ensuring that the build daemon flag is properly handled throughout all five stages. The bulk of how the daemon flag is handled is based on the downstream scanning daemon.
