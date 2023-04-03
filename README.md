@@ -13,6 +13,8 @@ This project aims to implement a daemon that serves as a build system manager fo
 
 During the initial phase of development, the primary focus will be on parallel builds for Unix systems using both traditional Clang modules and C++ standard modules. In the `Future Work` section, I outline future development plans that extend beyond the scope of GSoC.
 
+It is important to note that when it comes to C++ standard modules the build daemon does not attempt to replace any existing build systems. When possible it will be perferable to use a tool like `CMake` which supports explicit modules. (https://www.kitware.com/import-cmake-c20-modules/) The build daemon's purpose is to cover cases when a build system is not available. This is most common with large projects using traditional Clang modules and with tools like debugger and indexer.
+
 ---
 ## Project Details
 
@@ -210,8 +212,22 @@ new_ttl = curent_ttl + (depth_in_DAG * SCALING_FACTOR_2);
 Once a module's ttl has expired, it will be flagged as a candidate for deletion. If multiple modules have expired, the cache invalidator will start with the module that is least frequently used.
 
 > Rebuilds
+Everything discussed up until this point has been for builds from scratch. However, most of the time, when using a build system like `Ninja` or `Make` builds rely on a cache of object files and only recompile those translation units that have been changed. Build systems determine which translation units need to be recompiled by comparing the timestamp of the source file to that of the object file. If the source file's timestamp is more recent then the object file's timestamp the build system knows it must recompile the translation unit. The build daemon will use a similar approach when it comes to precompiled modules.
 
-Everything discussed up until this point has been for builds from scratch. However, most of the time, when using a build system like `Ninja` or `Make` builds rely on a cache of object files and only recompile those translation units that have been changed. Build systems determine which translation units need to be recompiled by comparing the timestamp of the source file to that of the object file. If the source file's timestamp is more recent then the object file then the build system knows it must recompile the translation unit.
+When a build daemon is spawned if there is a preexisting cache it compares the timestamp of the source file and the timestamp of the precompiled module to figure out which modules need to be rebuilt.
+
+It rebuilds the modules
+
+
+need to figure out a way to recompile the translation unit and relink the executable
+
+
+
+
+A translation unit is registered with the daemon
+
+The daemon must rescan the dependencies incase they have changed
+
 
 
 ---
