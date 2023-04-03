@@ -11,7 +11,7 @@ This project aims to implement a daemon that serves as a build system manager fo
 ---
 ## Project Priorities
 
-Initial development will focus on parallel Unix builds using traditional Clang modules and C++ standard modules. The section on `Future Work` discusses additional development that is out of scope for GSoC but will take place later down the road. 
+During the initial phase of development, the primary focus will be on parallel builds for Unix systems using both traditional Clang modules and C++ standard modules. In the `Future Work` section, I outline future development plans that extend beyond the scope of GSoC.
 
 ---
 ## Project Details
@@ -152,16 +152,16 @@ The build daemon will automatically terminate after "sitting empty" for a specif
 ---
 **Phase 3: Implement core build daemon functionality**
 
-The goal of phase 3 is to implement as scanning, scheduling, cache management, and module building. Phase 3 is the largest phase by far. 
+The goal of phase 3 is to implement scanning, scheduling, cache management, and module building. Phase 3 is the largest phase by far. 
 
 > Scanning
 
-While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file dependencies. So, the build deamon will use the scanning tool `clang-scan-deps`. `clang-scan-deps` can be integrated into the build daemon by relying on `class FullDeps`.
+While `cc1depscan_main.cpp` implements a scanning daemon it is limited to file dependencies. So, the build daemon will use the scanning tool `clang-scan-deps`. `clang-scan-deps` can be integrated into the build daemon by relying on `class FullDeps`.
 
-`FullDeps` or more specifically the `FullDeps` attribute `Modules` will represet all dependencies for the daemon. The scans for each translation unit will be merged into `Modules` using the public method `void mergeDeps(StringRef Input, TranslationUnitDeps TUDeps, size_t InputIndex)`. 
+`FullDeps` or more specifically the `FullDeps` attribute `Modules` will represet all dependencies for the daemon. The scans for each translation unit will be merged into `Modules` using the public method `mergeDeps`. 
 
 ```cpp
-// ClangScanDeps.cpp
+// clang/tools/clang-scan-deps/ClangScanDeps.cpp
 
 class FullDeps
 	public:
@@ -175,45 +175,43 @@ struct ModuleDeps
 	llvm::StringSet<> FileDeps; // collection of paths to direct dependencies
 }
 ```
-The build daemon's scanning functionality can be based on the libclang API provided by a downstream fork of llvm-project in `tools/libclang/CDependencies.cpp`. 
-
 
 > Scheduling & Building
 
-Scheduling will be done in accoradance with a deterministic topological sort. The order of dependencies will be based first on the number of translation units that require a dependency then second on the alphabetical ordering of the dependencies. 
+Scheduling will be done in accordance with a deterministic topological sort. The order of dependencies will be based first on the number of translation units that require a dependency then second on the alphabetical ordering of the dependencies. 
 
-For example, the build daemon receives its first registration, `lib/Parse/ParseAST.cpp`, and creates a graph of its dependencies. At first, since `lib/Parse/ParseASTcpp` is the only translation unit regestered with the build daemon the dependencies all have the same weight of `1` and are ordered in alphabetical order.
+For example, the build daemon receives its first registration, `lib/Parse/ParseAST.cpp`, and creates a graph of its dependencies. At first, since `lib/Parse/ParseASTcpp` is the only translation unit registered with the build daemon, the dependencies all have the same weight of `1` and are ordered in alphabetical order.
 
 <img src="parseast_schedule.PNG" width="100%" height="100%">
 
-Now, a second translation unit, `lib/Sema/SemaConcept.cpp`, is registered with the build daemon. The build daemon scans it's dependencies and incorporates the new translation unit's dependency graph into the projects dependency graph. 
+Now, a second translation unit, `lib/Sema/SemaConcept.cpp`, is registered with the build daemon. The build daemon scans its dependencies and incorporates the new translation unit's dependency graph into the project's dependency graph. 
 
 <img src="semaconcept_graph.PNG" width="25%" height="25%">
 
-The weights and priority are updated to reflect the new information.
+The weights and build schedule are updated to reflect the new information.
 
 <img src="project_schedule.PNG" width="100%" height="100%">
 
 > Cache Management
 
-The cache will comprise precompiled modules in the form of Clang AST files. Clang AST files contain a compressed bitstream of the AST and supporting data structures and can be chained to represent a project's dependency graph, making them a good fit for the build daemon.
+The build module will cache precompiled modules, as Clang AST files. These Clang AST files encode the AST as well as its associated data structures in a compressed bitstream format. One of the advantages of using Clang AST files is that they can be linked together to depict the dependency graph of a project, making them an ideal choice for the build daemon.
 
-The precompiled modules will initially solely be stored on disk allowing all precompiled modules to be stored simultaneously on the majority of modern computers. To accommodate resource constrained systems a simple cache invalidator will be implemented.
+Initially, the precompiled modules will be exclusively stored on disk. This approach allows most modern computers to simultaneously hold all of the precompiled modules in the cache. However, to ensure compatibility with systems that have limited resources, the build module will also include a cache invalidation mechanism.
 
-The cache invalidator will combine frequency based prioritization, time-to-live prioritization, and the dependency graph to determine which modules are saved. Everytime a module is built or used a new time-to-live will be calculated based on the following equations. 
+The cache invalidation mechanism will determine which modules to retain in the cache based on three factors: frequency of use, time-to-live (TTL), and the project's dependency graph. Each time a module is built or accessed, its TTL will be recalculated using specific equations that take these factors into account.
 
 ```cpp
-// senario one: module is compiled and added to cache
+// scenario one: module is compiled and added to the cache
 initial_ttl = depth_in_DAG * SCALING_FACTOR_1;
 
-// senario two: precompiled module is used
+// scenario two: precompiled module is used
 new_ttl = curent_ttl + (depth_in_DAG * SCALING_FACTOR_2);
 ```
-Once a module's ttl has expired it will be flaged as a candidate for deletion. If multiple modules have expired the cache invalidator will start with the module that is least frequently used.
+Once a module's ttl has expired, it will be flagged as a candidate for deletion. If multiple modules have expired, the cache invalidator will start with the module that is least frequently used.
 
 > Rebuilds
 
-Everything discussed up until this point has been for builds from scratch. However, most of the time, when using a build system like `Ninja` or `Make` builds rely on a cache of object files and only recompile those translation units that have been changed. 
+Everything discussed up until this point has been for builds from scratch. However, most of the time, when using a build system like `Ninja` or `Make` builds rely on a cache of object files and only recompile those translation units that have been changed. Build systems determine which translation units need to be recompiled by comparing the timestamp of the source file to that of the object file. If the source file's timestamp is more recent then the object file then the build system knows it must recompile the translation unit.
 
 
 ---
