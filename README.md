@@ -217,7 +217,7 @@ The proposal thus far has primarily addressed building software from scratch. Ho
 
 When a Clang invocation communicates with the build daemon, the daemon generates a dependency graph and consults the cache to determine whether the modules have already been built. If the modules exist, the daemon compares the timestamps of the source file and the precompiled module. When the source file has a more recent timestamp, indicating an update since the last build, the module is rebuilt. Additionally, any dependent modules that rely on the updated module are also rebuilt as part of the process.
 
-Currently, the build daemon can only be spawned by a Clang invocation. Consequently, the daemon's ability to check whether `pcm` should be rebuilt is contingent upon the build system's decision to rebuild the translation unit. This limitation presents a challenge that, while acknowledged, falls outside the scope of the GSoC project. It will be addressed during future development.
+Currently, the build daemon can only be spawned by a Clang invocation. Consequently, the daemon's ability to check whether a precompiled module  should be rebuilt is contingent upon the build system's decision to rebuild the translation unit. This limitation presents a challenge that, while acknowledged, falls outside the scope of the GSoC project. It will be addressed during future development.
 
 ---
 ## Timeline
@@ -231,17 +231,17 @@ Project Timeline
 
 - Phase 0: May 4 to May 28 (3.5 weeks)
 
-    - Task 1: finalize implmentation details
+    - Task 1: finalize implementation details
         - Verification Approach: complete a detailed algorithm design for each core feature of the build daemon (scanning, caching, scheduling) and create a list of subtasks for each task
 
 - Phase 1: May 29 - June 11 (2 weeks)
 
     - Task 1: add `-fmodule-build-daemon` flag to Clang so that it is recognized as a valid flag
-        - Verification Approach: a developer will be able to build any valid Clang project with "--build-daemon" included in the list of flags.
-        - Notes: At this point the flag "--build-daemon" will not have any functionality but will simply be a valid option and serve as a starting point for further develovment
+        - Verification Approach: a developer will be able to build any valid Clang project with `-fmodule-build-daemon` included in the list of flags.
+        - Notes: At this point the flag `-fmodule-build-daemon` will not have any functionality but will simply be a valid option and serve as a starting point for further development
 
     - Task 2: create a new Job so that `-cc1modbuildd` can be passed to the Clang front end
-        - Verification Apporach: when a developer uses `-fmodule-build-daemon` then `-cc1modbuildd` will be passed to the Clang front end
+        - Verification Approach: when a developer uses `-fmodule-build-daemon` then `-cc1modbuildd` will be passed to the Clang front end
         - Notes: at this point the flag `-cc1modbuildd` will not have any functionality
 
 - Phase 2: June 12 - July 2 (3 weeks)
@@ -256,8 +256,8 @@ Project Timeline
 
 - Phase 3: July 3 - August 28 (8 weeks)
 
-    - Task 1: Implement ability for build daemon to scan dependencies of registered Clang invokations
-        - Verification Approach: As Clang invokations are registered with the build daemon the daemon will generate a dependency graph for the registered translation unit.
+    - Task 1: Implement ability for build daemon to scan dependencies of registered Clang invocations
+        - Verification Approach: As Clang invocations are registered with the build daemon the daemon will generate a dependency graph for the registered translation unit.
         - Note: to verify, the dependency graph for each translation unit will be written to a log file
 
     - Task 2: Implement ability for build daemon to construct a project wide dependency graph
@@ -268,13 +268,13 @@ Project Timeline
         - Verification Approach: based on the project wide dependency graph the build daemon should mainitain a build list that specifies the order modules are to be built
         - Note: after each scan is completed the build list will be updated
 
-    - Task 4: Implement ability for build daemon to spawn Clang invokations
-        - Verification Approach: build daemon will use the build list to spawn Clang invokations, build modules, ans store AST files in memory
+    - Task 4: Implement ability for build daemon to spawn Clang invocations
+        - Verification Approach: build daemon will use the build list to spawn Clang invocations, build modules, ans store AST files in memory
         - Note: all AST files will simply be stored on disk. There will be no cache invalidation
 
     - Task 5: Implement ability for build daemon to return module's AST files to the Clang invocation
         - Verification Approach: Origional Clang invocation can used modules build by daemon to compile a translation unit
-        - Note: Up until this point Clang invokations will register with the build daemon but still use the implicit system. After this task is complete the Clang invocation will use the modules built by the daemon.
+        - Note: Up until this point Clang invocations will register with the build daemon but still use the implicit system. After this task is complete the Clang invocation will use the modules built by the daemon.
 
     - Task 6: Implement cache management
         - Verification approach: When the system runs out of space the cache invalidator will be smart about how it makes room
