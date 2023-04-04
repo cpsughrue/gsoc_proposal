@@ -1,4 +1,4 @@
-# Modules build daemon: build system agnostic support for explicitly built modules [GSoC Proposal]
+# Modules Build Daemon: Build System Agnostic Support for Explicitly Built Modules [GSoC Proposal]
 
 ## Motivation
 
